@@ -683,9 +683,9 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     String password = String(WIFI_PASSWORD);
     ssid.trim();
     password.trim();
-    return ssid.length() > 0 &&
-           ssid != "YOUR_WIFI_SSID" &&
-           password != "YOUR_WIFI_PASSWORD";
+    if (ssid.length() == 0 || ssid == "YOUR_WIFI_SSID") return false;
+    if (password == "YOUR_WIFI_PASSWORD") return false;
+    return true;
   }
 
   bool assistant_busy() {
@@ -711,20 +711,27 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
         WiFi.disconnect();
         service_ui_delay(100);
       }
-      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      String password = String(WIFI_PASSWORD);
+      password.trim();
+      if (password.length() == 0) {
+        WiFi.begin(WIFI_SSID);
+      } else {
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      }
       wifi_connecting = true;
       wifi_connect_started_ms = millis();
     }
 
-    uint32_t start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < timeout_ms) {
+    uint32_t deadline = wifi_connect_started_ms + timeout_ms;
+    while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
       service_ui_delay(50);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
       wifi_connecting = false;
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
-      Serial.printf("Wi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
+      String ip = WiFi.localIP().toString();
+      Serial.printf("Wi-Fi connected: %s\n", ip.c_str());
       return true;
     }
 
