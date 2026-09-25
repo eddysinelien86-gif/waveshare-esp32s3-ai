@@ -762,6 +762,11 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
   }
 
   void run_ask_ai_flow() {
+    if (!wifi_is_configured()) {
+      update_avatar_state(AVATAR_ERROR, "Wi-Fi config needed");
+      return;
+    }
+
     if (WiFi.status() != WL_CONNECTED && !connect_wifi(10000)) {
       update_avatar_state(AVATAR_ERROR, "No Wi-Fi");
       return;
