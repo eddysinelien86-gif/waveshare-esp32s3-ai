@@ -607,16 +607,18 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     return input;
   }
 
-  String ask_ai_service(const String& user_prompt) {
+  bool ask_ai_service(const String& user_prompt, String& response) {
     String endpoint = String(AI_ENDPOINT_URL);
     endpoint.trim();
 
     if (endpoint.length() == 0 || endpoint.indexOf("your-ai-webhook-or-api-endpoint") >= 0) {
-      return "Set AI_ENDPOINT_URL in the sketch to your AI service URL.";
+      response = "Set AI_ENDPOINT_URL in the sketch to your AI service URL.";
+      return false;
     }
 
     if (!endpoint.startsWith("https://")) {
-      return "AI endpoint must use HTTPS.";
+      response = "AI endpoint must use HTTPS.";
+      return false;
     }
 
     HTTPClient http;
@@ -632,13 +634,17 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     }
 
     int code = http.POST(user_prompt);
-    String response = "No response received.";
+    response = "No response received.";
+    bool success = false;
 
     if (code >= 200 && code < 300) {
       response = http.getString();
       response.trim();
       if (response.length() == 0) {
         response = "AI service returned an empty response.";
+        success = false;
+      } else {
+        success = true;
       }
     } else if (code > 0) {
       response = "AI request failed with status: " + String(code);
@@ -647,7 +653,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     }
 
     http.end();
-    return response;
+    return success;
   }
 
   void speak_text(const String& text) {
@@ -751,8 +757,14 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     Serial.println("[USER] " + user_prompt);
     update_avatar_state(AVATAR_THINKING, "Thinking...");
 
-    String response = ask_ai_service(user_prompt);
+    String response;
+    bool ai_ok = ask_ai_service(user_prompt, response);
     Serial.println("[AI] " + response);
+
+    if (!ai_ok) {
+      update_avatar_state(AVATAR_ERROR, "AI request failed");
+      return;
+    }
 
     update_avatar_state(AVATAR_SPEAKING, "Speaking...");
     speak_text(response);
@@ -1020,7 +1032,7 @@ void setup() {
   // Create UI
   create_main_ui();
   update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
-  connect_wifi();
+  connect_wifi(1200);
   
   Serial.println();
   Serial.println("ELIO AI Assistant Phase 1 initialized successfully!");
