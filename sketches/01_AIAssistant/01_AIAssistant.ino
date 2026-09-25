@@ -137,6 +137,7 @@ void update_avatar_state(AvatarState state, const String& text);
 bool connect_wifi(uint32_t timeout_ms = 15000);
 void run_ask_ai_flow();
 void service_ui_delay(uint32_t ms);
+bool wifi_is_configured();
 
 // ==================== DEBUG OUTPUT ====================
 
@@ -676,9 +677,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
   }
 
   bool connect_wifi(uint32_t timeout_ms) {
-    String ssid = String(WIFI_SSID);
-    ssid.trim();
-    if (ssid.length() == 0 || ssid == "YOUR_WIFI_SSID") {
+    if (!wifi_is_configured()) {
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: CONFIG NEEDED");
       return false;
     }
@@ -689,6 +688,12 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
       wifi_connecting = false;
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
       return true;
+    }
+
+    bool wifi_is_configured() {
+      String ssid = String(WIFI_SSID);
+      ssid.trim();
+      return ssid.length() > 0 && ssid != "YOUR_WIFI_SSID";
     }
 
     if (!wifi_connecting || (millis() - wifi_connect_started_ms > timeout_ms)) {
@@ -802,7 +807,6 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 static void btn_ask_ai_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ASK AI");
   ask_ai_requested = true;
-  update_avatar_state(AVATAR_LISTENING, "Ready to listen...");
 }
 
 static void btn_estimate_clicked(lv_event_t * e) {
@@ -1047,6 +1051,9 @@ void setup() {
   // Create UI
   create_main_ui();
   update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
+  if (!wifi_is_configured() && lbl_wifi_status) {
+    lv_label_set_text(lbl_wifi_status, "Wi-Fi: CONFIG NEEDED");
+  }
   
   Serial.println();
   Serial.println("ELIO AI Assistant Phase 1 initialized successfully!");
@@ -1074,7 +1081,9 @@ void loop() {
   }
 
   // Periodic Wi-Fi reconnect
-  if (WiFi.status() != WL_CONNECTED && (last_wifi_retry_ms == 0 || now - last_wifi_retry_ms > 30000)) {
+  if (wifi_is_configured() &&
+      WiFi.status() != WL_CONNECTED &&
+      (last_wifi_retry_ms == 0 || now - last_wifi_retry_ms > 30000)) {
     last_wifi_retry_ms = now;
     connect_wifi(3000);
   }
