@@ -139,6 +139,7 @@ bool connect_wifi(uint32_t timeout_ms = 15000);
 void run_ask_ai_flow();
 void service_ui_delay(uint32_t ms);
 bool wifi_is_configured();
+bool assistant_busy();
 
 // ==================== DEBUG OUTPUT ====================
 
@@ -684,8 +685,11 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     password.trim();
     return ssid.length() > 0 &&
            ssid != "YOUR_WIFI_SSID" &&
-           password.length() > 0 &&
            password != "YOUR_WIFI_PASSWORD";
+  }
+
+  bool assistant_busy() {
+    return ask_ai_in_progress || ask_ai_queue > 0;
   }
 
   bool connect_wifi(uint32_t timeout_ms) {
@@ -823,16 +827,19 @@ static void btn_ask_ai_clicked(lv_event_t * e) {
 
 static void btn_estimate_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ESTIMATE");
+  if (assistant_busy()) return;
   update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
 }
 
 static void btn_business_clicked(lv_event_t * e) {
   Serial.println("Button clicked: BUSINESS");
+  if (assistant_busy()) return;
   update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
 }
 
 static void btn_settings_clicked(lv_event_t * e) {
   Serial.println("Button clicked: SETTINGS");
+  if (assistant_busy()) return;
   update_avatar_state(AVATAR_IDLE, "Set Wi-Fi + AI URL");
 }
 
