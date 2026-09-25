@@ -128,10 +128,13 @@ enum AvatarState {
 AvatarState avatar_state = AVATAR_IDLE;
 uint32_t last_wifi_retry_ms = 0;
 volatile bool ask_ai_requested = false;
+bool wifi_connecting = false;
+uint32_t wifi_connect_started_ms = 0;
 
 void update_avatar_state(AvatarState state, const String& text);
 bool connect_wifi(uint32_t timeout_ms = 15000);
 void run_ask_ai_flow();
+void service_ui_delay(uint32_t ms);
 
 // ==================== DEBUG OUTPUT ====================
 
@@ -597,7 +600,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
           input += c;
         }
       }
-      delay(10);
+      service_ui_delay(10);
     }
 
     input.trim();
@@ -610,6 +613,10 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
     if (endpoint.length() == 0 || endpoint.indexOf("your-ai-webhook-or-api-endpoint") >= 0) {
       return "Set AI_ENDPOINT_URL in the sketch to your AI service URL.";
+    }
+
+    if (!endpoint.startsWith("https://")) {
+      return "AI endpoint must use HTTPS.";
     }
 
     HTTPClient http;
@@ -658,25 +665,30 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     WiFi.mode(WIFI_STA);
     wl_status_t wifi_status = WiFi.status();
     if (wifi_status == WL_CONNECTED) {
+      wifi_connecting = false;
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
       return true;
     }
 
-    if (wifi_status != WL_IDLE_STATUS) {
+    if (!wifi_connecting || (millis() - wifi_connect_started_ms > timeout_ms)) {
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      wifi_connecting = true;
+      wifi_connect_started_ms = millis();
     }
 
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < timeout_ms) {
-      delay(250);
+      service_ui_delay(50);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
+      wifi_connecting = false;
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
       Serial.printf("Wi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
       return true;
     }
 
+    wifi_connecting = false;
     if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: OFF");
     return false;
   }
@@ -744,9 +756,17 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
     update_avatar_state(AVATAR_SPEAKING, "Speaking...");
     speak_text(response);
-    delay(1200);
+    service_ui_delay(1200);
 
     update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
+  }
+
+  void service_ui_delay(uint32_t ms) {
+    uint32_t start = millis();
+    while (millis() - start < ms) {
+      lv_timer_handler();
+      delay(5);
+    }
   }
 }
 
