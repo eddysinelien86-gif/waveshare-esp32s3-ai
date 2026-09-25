@@ -728,7 +728,6 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
       return true;
     }
 
-    wifi_connecting = false;
     if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: OFF");
     return false;
   }
