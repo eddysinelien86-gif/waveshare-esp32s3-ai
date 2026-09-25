@@ -55,7 +55,7 @@ Before uploading, edit these values in `01_AIAssistant.ino`:
 - `AI_ENDPOINT_URL`
 - `AI_API_KEY` (optional)
 
-The sketch currently captures user prompts from Serial input (type a sentence and press Enter after tapping **ASK AI**), then sends the text to your AI endpoint. If no input is received before timeout, the avatar shows **No input detected**.
+The sketch currently captures user prompts from Serial input (type a sentence and press Enter after tapping **ASK AI**), then sends the text to your **HTTPS** AI endpoint. If no input is received before timeout, the avatar shows **No input detected**.
 
 ## Installation
 

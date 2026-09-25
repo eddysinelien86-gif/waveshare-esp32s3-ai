@@ -762,7 +762,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     Serial.println("[AI] " + response);
 
     if (!ai_ok) {
-      update_avatar_state(AVATAR_ERROR, "AI request failed");
+      update_avatar_state(AVATAR_ERROR, response);
       return;
     }
 
