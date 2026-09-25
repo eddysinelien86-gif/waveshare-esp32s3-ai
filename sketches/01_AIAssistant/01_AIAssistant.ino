@@ -127,6 +127,7 @@ enum AvatarState {
 
 AvatarState avatar_state = AVATAR_IDLE;
 uint32_t last_wifi_retry_ms = 0;
+volatile bool ask_ai_requested = false;
 
 void update_avatar_state(AvatarState state, const String& text);
 bool connect_wifi(uint32_t timeout_ms = 15000);
@@ -626,12 +627,14 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     int code = http.POST(user_prompt);
     String response = "No response received.";
 
-    if (code > 0) {
+    if (code >= 200 && code < 300) {
       response = http.getString();
       response.trim();
       if (response.length() == 0) {
         response = "AI service returned an empty response.";
       }
+    } else if (code > 0) {
+      response = "AI request failed with status: " + String(code);
     } else {
       response = "AI request failed. HTTP error: " + String(code);
     }
@@ -653,7 +656,15 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     }
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    wl_status_t wifi_status = WiFi.status();
+    if (wifi_status == WL_CONNECTED) {
+      if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
+      return true;
+    }
+
+    if (wifi_status != WL_IDLE_STATUS) {
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    }
 
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < timeout_ms) {
@@ -721,7 +732,8 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     update_avatar_state(AVATAR_LISTENING, "Listening...");
     String user_prompt = capture_user_input_from_serial();
     if (user_prompt.length() == 0) {
-      user_prompt = "Hello, introduce yourself as my ESP32 AI avatar.";
+      update_avatar_state(AVATAR_ERROR, "No input detected");
+      return;
     }
 
     Serial.println("[USER] " + user_prompt);
@@ -742,7 +754,8 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
 static void btn_ask_ai_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ASK AI");
-  run_ask_ai_flow();
+  ask_ai_requested = true;
+  update_avatar_state(AVATAR_LISTENING, "Ready to listen...");
 }
 
 static void btn_estimate_clicked(lv_event_t * e) {
@@ -1018,6 +1031,11 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED && now - last_wifi_retry_ms > 30000) {
     last_wifi_retry_ms = now;
     connect_wifi(3000);
+  }
+
+  if (ask_ai_requested) {
+    ask_ai_requested = false;
+    run_ask_ai_flow();
   }
   
   delay(5);
