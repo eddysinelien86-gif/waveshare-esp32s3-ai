@@ -129,7 +129,7 @@ enum AvatarState {
 
 AvatarState avatar_state = AVATAR_IDLE;
 uint32_t last_wifi_retry_ms = 0;
-volatile uint8_t ask_ai_queue = 0;
+uint8_t ask_ai_queue = 0;
 bool ask_ai_in_progress = false;
 bool wifi_connecting = false;
 uint32_t wifi_connect_started_ms = 0;
@@ -140,6 +140,7 @@ void run_ask_ai_flow();
 void service_ui_delay(uint32_t ms);
 bool wifi_is_configured();
 bool assistant_busy();
+void show_error_then_idle(const String& message);
 
 // ==================== DEBUG OUTPUT ====================
 
@@ -708,7 +709,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
     if (!wifi_connecting || (millis() - wifi_connect_started_ms > timeout_ms)) {
       if (wifi_connecting) {
-        WiFi.disconnect();
+        WiFi.disconnect(false);
         service_ui_delay(100);
       }
       String password = String(WIFI_PASSWORD);
@@ -784,14 +785,14 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
   void run_ask_ai_flow() {
     if (WiFi.status() != WL_CONNECTED && !connect_wifi(10000)) {
-      update_avatar_state(AVATAR_ERROR, wifi_is_configured() ? "No Wi-Fi" : "Wi-Fi config needed");
+      show_error_then_idle(wifi_is_configured() ? "No Wi-Fi" : "Wi-Fi config needed");
       return;
     }
 
     update_avatar_state(AVATAR_LISTENING, "Listening...");
     String user_prompt = capture_user_input_from_serial();
     if (user_prompt.length() == 0) {
-      update_avatar_state(AVATAR_ERROR, "No input detected");
+      show_error_then_idle("No input detected");
       return;
     }
 
@@ -803,7 +804,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     Serial.println("[AI] " + response);
 
     if (!ai_ok) {
-      update_avatar_state(AVATAR_ERROR, response);
+      show_error_then_idle(response);
       return;
     }
 
@@ -811,6 +812,12 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     speak_text(response);
     service_ui_delay(1200);
 
+    update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
+  }
+
+  void show_error_then_idle(const String& message) {
+    update_avatar_state(AVATAR_ERROR, message);
+    service_ui_delay(1500);
     update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
   }
 
