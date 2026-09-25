@@ -31,6 +31,7 @@
 #include <Wire.h>
 #include <lvgl.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
 // ==================== CONFIGURATION ====================
@@ -94,8 +95,9 @@
 // Wi-Fi + AI cloud settings
 const char* WIFI_SSID = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* AI_ENDPOINT_URL = "https://your-ai-webhook-or-api-endpoint";
+const char* AI_ENDPOINT_URL = "https://your-ai-endpoint";
 const char* AI_API_KEY = "";
+const char* AI_ROOT_CA = "-----BEGIN CERTIFICATE-----\nYOUR_ROOT_CA_CERT\n-----END CERTIFICATE-----\n";
 
 // ==================== GLOBALS ====================
 
@@ -586,6 +588,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     Serial.println("[LISTEN] Type your message in Serial Monitor and press Enter...");
     uint32_t start = millis();
     String input;
+    input.reserve(256);
 
     while (millis() - start < timeout_ms) {
       while (Serial.available() > 0) {
@@ -611,7 +614,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     String endpoint = String(AI_ENDPOINT_URL);
     endpoint.trim();
 
-    if (endpoint.length() == 0 || endpoint.indexOf("your-ai-webhook-or-api-endpoint") >= 0) {
+    if (endpoint.length() == 0 || endpoint.indexOf("your-ai-endpoint") >= 0) {
       response = "Set AI_ENDPOINT_URL in the sketch to your AI service URL.";
       return false;
     }
@@ -621,8 +624,20 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
       return false;
     }
 
+    String root_ca = String(AI_ROOT_CA);
+    if (root_ca.indexOf("YOUR_ROOT_CA_CERT") >= 0) {
+      response = "Set AI_ROOT_CA certificate for TLS verification.";
+      return false;
+    }
+
+    WiFiClientSecure secure_client;
+    secure_client.setCACert(AI_ROOT_CA);
+
     HTTPClient http;
-    http.begin(endpoint);
+    if (!http.begin(secure_client, endpoint)) {
+      response = "Failed to start HTTPS request.";
+      return false;
+    }
     http.setConnectTimeout(12000);
     http.setTimeout(20000);
     http.addHeader("Content-Type", "text/plain");
@@ -1032,7 +1047,6 @@ void setup() {
   // Create UI
   create_main_ui();
   update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
-  connect_wifi(1200);
   
   Serial.println();
   Serial.println("ELIO AI Assistant Phase 1 initialized successfully!");
@@ -1060,7 +1074,7 @@ void loop() {
   }
 
   // Periodic Wi-Fi reconnect
-  if (WiFi.status() != WL_CONNECTED && now - last_wifi_retry_ms > 30000) {
+  if (WiFi.status() != WL_CONNECTED && (last_wifi_retry_ms == 0 || now - last_wifi_retry_ms > 30000)) {
     last_wifi_retry_ms = now;
     connect_wifi(3000);
   }

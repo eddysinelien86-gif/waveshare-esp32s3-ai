@@ -10,7 +10,7 @@ Touchscreen AI avatar sketch for Waveshare ESP32-S3 with Wi-Fi cloud AI requests
 - **ST7789 Display**: 240x320 pixel LCD with full color support
 - **Touch Support**: CST328/CST3530 touchscreen auto-detection
 - **ASK AI Flow**: Tap **ASK AI** to run listen → think → answer cycle
-- **Cloud AI Hook**: Sends user prompt to your HTTP AI endpoint
+- **Cloud AI Hook**: Sends user prompt to your HTTPS AI endpoint
 - **Arduino IDE Compatible**: Single .ino sketch, no PlatformIO required
 
 ## Hardware
@@ -54,6 +54,7 @@ Before uploading, edit these values in `01_AIAssistant.ino`:
 - `WIFI_PASSWORD`
 - `AI_ENDPOINT_URL`
 - `AI_API_KEY` (optional)
+- `AI_ROOT_CA` (required CA certificate for TLS verification)
 
 The sketch currently captures user prompts from Serial input (type a sentence and press Enter after tapping **ASK AI**), then sends the text to your **HTTPS** AI endpoint. If no input is received before timeout, the avatar shows **No input detected**.
 
@@ -67,7 +68,7 @@ The sketch currently captures user prompts from Serial input (type a sentence an
 
 ## Button Behavior
 
-- **ASK AI**: Connects Wi-Fi (if needed), listens for input on Serial, calls cloud AI endpoint, speaks/prints response
+- **ASK AI**: Connects Wi-Fi (if needed), listens for input on Serial, calls cloud HTTPS AI endpoint, speaks/prints response
 - **ESTIMATE / BUSINESS**: Return avatar to idle state
 - **SETTINGS**: Shows configuration reminder
 
@@ -90,7 +91,7 @@ No calibration needed - coordinates map directly 1:1 with display coordinates.
 
 ## Notes
 
-- This version includes Wi-Fi + HTTP AI request flow
+- This version includes Wi-Fi + HTTPS AI request flow
 - All hardware configuration from working 00_HardwareTest
 - Touch and display stable at 115200 baud
 - Display initialized at 80MHz SPI frequency
