@@ -133,6 +133,7 @@ uint8_t ask_ai_queue = 0;
 bool ask_ai_in_progress = false;
 bool wifi_connecting = false;
 uint32_t wifi_connect_started_ms = 0;
+const uint8_t ASK_AI_QUEUE_LIMIT = 3;
 
 void update_avatar_state(AvatarState state, const String& text);
 bool connect_wifi(uint32_t timeout_ms = 15000);
@@ -723,8 +724,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
       wifi_connect_started_ms = millis();
     }
 
-    uint32_t deadline = wifi_connect_started_ms + timeout_ms;
-    while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
+    while (WiFi.status() != WL_CONNECTED && (millis() - wifi_connect_started_ms) < timeout_ms) {
       service_ui_delay(50);
     }
 
@@ -834,7 +834,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
 static void btn_ask_ai_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ASK AI");
-  if (ask_ai_queue < 3) {
+  if (ask_ai_queue < ASK_AI_QUEUE_LIMIT) {
     ask_ai_queue++;
   }
 }
