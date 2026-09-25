@@ -678,8 +678,13 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
   bool wifi_is_configured() {
     String ssid = String(WIFI_SSID);
+    String password = String(WIFI_PASSWORD);
     ssid.trim();
-    return ssid.length() > 0 && ssid != "YOUR_WIFI_SSID";
+    password.trim();
+    return ssid.length() > 0 &&
+           ssid != "YOUR_WIFI_SSID" &&
+           password.length() > 0 &&
+           password != "YOUR_WIFI_PASSWORD";
   }
 
   bool connect_wifi(uint32_t timeout_ms) {
@@ -762,13 +767,8 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
   }
 
   void run_ask_ai_flow() {
-    if (!wifi_is_configured()) {
-      update_avatar_state(AVATAR_ERROR, "Wi-Fi config needed");
-      return;
-    }
-
     if (WiFi.status() != WL_CONNECTED && !connect_wifi(10000)) {
-      update_avatar_state(AVATAR_ERROR, "No Wi-Fi");
+      update_avatar_state(AVATAR_ERROR, wifi_is_configured() ? "No Wi-Fi" : "Wi-Fi config needed");
       return;
     }
 
