@@ -689,7 +689,7 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
   }
 
   bool assistant_busy() {
-    return ask_ai_in_progress || ask_ai_queue > 0;
+    return ask_ai_in_progress;
   }
 
   bool connect_wifi(uint32_t timeout_ms) {

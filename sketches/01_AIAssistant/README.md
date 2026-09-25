@@ -56,7 +56,7 @@ Before uploading, edit these values in `01_AIAssistant.ino`:
 - `AI_API_KEY` (optional)
 - `AI_ROOT_CA` (required CA certificate for TLS verification)
 
-The sketch currently captures user prompts from Serial input (type a sentence and press Enter within ~7 seconds after tapping **ASK AI**), then sends the text to your **HTTPS** AI endpoint as a `text/plain` POST body and expects plain-text response text. If no input is received before timeout, the avatar shows **No input detected**.
+The sketch currently captures user prompts from Serial input (type a sentence and press Enter within ~7 seconds **after Wi-Fi is connected and the avatar enters Listening state**), then sends the text to your **HTTPS** AI endpoint as a `text/plain` POST body and expects plain-text response text. If no input is received before timeout, the avatar shows **No input detected**.
 
 ## Installation
 
