@@ -129,7 +129,8 @@ enum AvatarState {
 
 AvatarState avatar_state = AVATAR_IDLE;
 uint32_t last_wifi_retry_ms = 0;
-volatile bool ask_ai_requested = false;
+volatile uint8_t ask_ai_queue = 0;
+bool ask_ai_in_progress = false;
 bool wifi_connecting = false;
 uint32_t wifi_connect_started_ms = 0;
 
@@ -702,6 +703,10 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     }
 
     if (!wifi_connecting || (millis() - wifi_connect_started_ms > timeout_ms)) {
+      if (wifi_connecting) {
+        WiFi.disconnect();
+        service_ui_delay(100);
+      }
       WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
       wifi_connecting = true;
       wifi_connect_started_ms = millis();
@@ -811,7 +816,9 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
 
 static void btn_ask_ai_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ASK AI");
-  ask_ai_requested = true;
+  if (ask_ai_queue < 3) {
+    ask_ai_queue++;
+  }
 }
 
 static void btn_estimate_clicked(lv_event_t * e) {
@@ -1086,7 +1093,8 @@ void loop() {
   }
 
   // Periodic Wi-Fi reconnect
-  if (!ask_ai_requested &&
+  if (!ask_ai_in_progress &&
+      ask_ai_queue == 0 &&
       wifi_is_configured() &&
       WiFi.status() != WL_CONNECTED &&
       (last_wifi_retry_ms == 0 || now - last_wifi_retry_ms > 30000)) {
@@ -1094,9 +1102,11 @@ void loop() {
     connect_wifi(3000);
   }
 
-  if (ask_ai_requested) {
-    ask_ai_requested = false;
+  if (!ask_ai_in_progress && ask_ai_queue > 0) {
+    ask_ai_queue--;
+    ask_ai_in_progress = true;
     run_ask_ai_flow();
+    ask_ai_in_progress = false;
   }
   
   delay(5);
