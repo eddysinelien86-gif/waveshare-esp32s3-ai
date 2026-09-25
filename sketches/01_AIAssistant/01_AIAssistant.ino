@@ -30,6 +30,8 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <lvgl.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 
 // ==================== CONFIGURATION ====================
 
@@ -89,6 +91,12 @@
 #define SERIAL_BAUD             115200
 #define TOUCH_DEBOUNCE_MS       50
 
+// Wi-Fi + AI cloud settings
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* AI_ENDPOINT_URL = "https://your-ai-webhook-or-api-endpoint";
+const char* AI_API_KEY = "";
+
 // ==================== GLOBALS ====================
 
 SPIClass spi_display(FSPI);
@@ -105,6 +113,24 @@ uint8_t touch_controller = 0;
 // Status labels (for updates)
 lv_obj_t * lbl_wifi_status = NULL;
 lv_obj_t * lbl_ai_status = NULL;
+lv_obj_t * lbl_avatar_status = NULL;
+lv_obj_t * ai_icon = NULL;
+lv_obj_t * icon_lbl = NULL;
+
+enum AvatarState {
+  AVATAR_IDLE,
+  AVATAR_LISTENING,
+  AVATAR_THINKING,
+  AVATAR_SPEAKING,
+  AVATAR_ERROR
+};
+
+AvatarState avatar_state = AVATAR_IDLE;
+uint32_t last_wifi_retry_ms = 0;
+
+void update_avatar_state(AvatarState state, const String& text);
+bool connect_wifi(uint32_t timeout_ms = 15000);
+void run_ask_ai_flow();
 
 // ==================== DEBUG OUTPUT ====================
 
@@ -551,24 +577,187 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     data->state = LV_INDEV_STATE_RELEASED;
     last_pressed = false;
   }
+
+  String capture_user_input_from_serial(uint32_t timeout_ms = 7000) {
+    Serial.println("[LISTEN] Type your message in Serial Monitor and press Enter...");
+    uint32_t start = millis();
+    String input;
+
+    while (millis() - start < timeout_ms) {
+      while (Serial.available() > 0) {
+        char c = (char)Serial.read();
+        if (c == '\r') continue;
+        if (c == '\n') {
+          input.trim();
+          if (input.length() > 0) {
+            return input;
+          }
+        } else {
+          input += c;
+        }
+      }
+      delay(10);
+    }
+
+    input.trim();
+    return input;
+  }
+
+  String ask_ai_service(const String& user_prompt) {
+    String endpoint = String(AI_ENDPOINT_URL);
+    endpoint.trim();
+
+    if (endpoint.length() == 0 || endpoint.indexOf("your-ai-webhook-or-api-endpoint") >= 0) {
+      return "Set AI_ENDPOINT_URL in the sketch to your AI service URL.";
+    }
+
+    HTTPClient http;
+    http.begin(endpoint);
+    http.setConnectTimeout(12000);
+    http.setTimeout(20000);
+    http.addHeader("Content-Type", "text/plain");
+
+    String api_key = String(AI_API_KEY);
+    api_key.trim();
+    if (api_key.length() > 0) {
+      http.addHeader("Authorization", "Bearer " + api_key);
+    }
+
+    int code = http.POST(user_prompt);
+    String response = "No response received.";
+
+    if (code > 0) {
+      response = http.getString();
+      response.trim();
+      if (response.length() == 0) {
+        response = "AI service returned an empty response.";
+      }
+    } else {
+      response = "AI request failed. HTTP error: " + String(code);
+    }
+
+    http.end();
+    return response;
+  }
+
+  void speak_text(const String& text) {
+    Serial.println("[SPEAK] " + text);
+  }
+
+  bool connect_wifi(uint32_t timeout_ms) {
+    String ssid = String(WIFI_SSID);
+    ssid.trim();
+    if (ssid.length() == 0 || ssid == "YOUR_WIFI_SSID") {
+      if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: CONFIG NEEDED");
+      return false;
+    }
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    uint32_t start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < timeout_ms) {
+      delay(250);
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
+      Serial.printf("Wi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
+      return true;
+    }
+
+    if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: OFF");
+    return false;
+  }
+
+  void update_avatar_state(AvatarState state, const String& text) {
+    avatar_state = state;
+
+    if (lbl_avatar_status) {
+      lv_label_set_text(lbl_avatar_status, text.c_str());
+    }
+
+    if (icon_lbl) {
+      switch (state) {
+        case AVATAR_IDLE:
+          lv_label_set_text(icon_lbl, LV_SYMBOL_MICROPHONE);
+          break;
+        case AVATAR_LISTENING:
+          lv_label_set_text(icon_lbl, LV_SYMBOL_CALL);
+          break;
+        case AVATAR_THINKING:
+          lv_label_set_text(icon_lbl, LV_SYMBOL_REFRESH);
+          break;
+        case AVATAR_SPEAKING:
+          lv_label_set_text(icon_lbl, LV_SYMBOL_AUDIO);
+          break;
+        case AVATAR_ERROR:
+          lv_label_set_text(icon_lbl, LV_SYMBOL_WARNING);
+          break;
+      }
+    }
+
+    if (ai_icon) {
+      uint32_t color = COLOR_PRIMARY;
+      if (state == AVATAR_LISTENING) color = COLOR_SUCCESS;
+      if (state == AVATAR_THINKING) color = COLOR_WARNING;
+      if (state == AVATAR_ERROR) color = COLOR_ERROR;
+      lv_obj_set_style_bg_color(ai_icon, lv_color_hex(color), 0);
+    }
+
+    if (lbl_ai_status) {
+      if (state == AVATAR_IDLE) lv_label_set_text(lbl_ai_status, "AI: READY");
+      else if (state == AVATAR_ERROR) lv_label_set_text(lbl_ai_status, "AI: ERROR");
+      else lv_label_set_text(lbl_ai_status, "AI: BUSY");
+    }
+  }
+
+  void run_ask_ai_flow() {
+    if (WiFi.status() != WL_CONNECTED && !connect_wifi(10000)) {
+      update_avatar_state(AVATAR_ERROR, "No Wi-Fi");
+      return;
+    }
+
+    update_avatar_state(AVATAR_LISTENING, "Listening...");
+    String user_prompt = capture_user_input_from_serial();
+    if (user_prompt.length() == 0) {
+      user_prompt = "Hello, introduce yourself as my ESP32 AI avatar.";
+    }
+
+    Serial.println("[USER] " + user_prompt);
+    update_avatar_state(AVATAR_THINKING, "Thinking...");
+
+    String response = ask_ai_service(user_prompt);
+    Serial.println("[AI] " + response);
+
+    update_avatar_state(AVATAR_SPEAKING, "Speaking...");
+    speak_text(response);
+    delay(1200);
+
+    update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
+  }
 }
 
 // ==================== BUTTON CALLBACKS ====================
 
 static void btn_ask_ai_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ASK AI");
+  run_ask_ai_flow();
 }
 
 static void btn_estimate_clicked(lv_event_t * e) {
   Serial.println("Button clicked: ESTIMATE");
+  update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
 }
 
 static void btn_business_clicked(lv_event_t * e) {
   Serial.println("Button clicked: BUSINESS");
+  update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
 }
 
 static void btn_settings_clicked(lv_event_t * e) {
   Serial.println("Button clicked: SETTINGS");
+  update_avatar_state(AVATAR_IDLE, "Set Wi-Fi + AI URL");
 }
 
 // ==================== LVGL INITIALIZATION ====================
@@ -639,19 +828,25 @@ void create_main_ui() {
   lv_obj_set_style_pad_all(center_area, 0, 0);
   
   // AI Icon
-  lv_obj_t * ai_icon = lv_obj_create(center_area);
+  ai_icon = lv_obj_create(center_area);
   lv_obj_set_size(ai_icon, 100, 100);
   lv_obj_set_style_radius(ai_icon, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(ai_icon, lv_color_hex(COLOR_PRIMARY), 0);
   lv_obj_set_style_border_width(ai_icon, 0, 0);
-  lv_obj_align(ai_icon, LV_ALIGN_CENTER, 0, 0);
+  lv_obj_align(ai_icon, LV_ALIGN_TOP_MID, 0, 5);
   
   // Microphone symbol
-  lv_obj_t * icon_lbl = lv_label_create(ai_icon);
+  icon_lbl = lv_label_create(ai_icon);
   lv_label_set_text(icon_lbl, LV_SYMBOL_MICROPHONE);
   lv_obj_set_style_text_font(icon_lbl, &lv_font_montserrat_48, 0);
   lv_obj_set_style_text_color(icon_lbl, lv_color_hex(COLOR_WHITE), 0);
   lv_obj_align(icon_lbl, LV_ALIGN_CENTER, 0, 0);
+
+  lbl_avatar_status = lv_label_create(center_area);
+  lv_label_set_text(lbl_avatar_status, "Tap ASK AI");
+  lv_obj_set_style_text_font(lbl_avatar_status, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(lbl_avatar_status, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_align(lbl_avatar_status, LV_ALIGN_BOTTOM_MID, 0, -5);
   
   // Button area
   lv_obj_t * btn_area = lv_obj_create(scr);
@@ -744,7 +939,7 @@ void create_main_ui() {
   
   // AI status
   lbl_ai_status = lv_label_create(status_bar);
-  lv_label_set_text(lbl_ai_status, "AI: OFF");
+  lv_label_set_text(lbl_ai_status, "AI: READY");
   lv_obj_set_style_text_font(lbl_ai_status, &lv_font_montserrat_12, 0);
   lv_obj_set_style_text_color(lbl_ai_status, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
   
@@ -791,6 +986,8 @@ void setup() {
   
   // Create UI
   create_main_ui();
+  update_avatar_state(AVATAR_IDLE, "Tap ASK AI");
+  connect_wifi();
   
   Serial.println();
   Serial.println("ELIO AI Assistant Phase 1 initialized successfully!");
@@ -815,6 +1012,12 @@ void loop() {
   if (now - last_memory_check > 10000) {
     print_memory();
     last_memory_check = now;
+  }
+
+  // Periodic Wi-Fi reconnect
+  if (WiFi.status() != WL_CONNECTED && now - last_wifi_retry_ms > 30000) {
+    last_wifi_retry_ms = now;
+    connect_wifi(3000);
   }
   
   delay(5);

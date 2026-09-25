@@ -1,6 +1,6 @@
-# ELIO AI Assistant - Phase 1
+# ELIO AI Assistant - Wi-Fi AI Avatar
 
-Modern touchscreen AI Assistant UI built with LVGL 8.3.x for Waveshare ESP32-S3.
+Touchscreen AI avatar sketch for Waveshare ESP32-S3 with Wi-Fi cloud AI requests.
 
 ## Features
 
@@ -9,6 +9,8 @@ Modern touchscreen AI Assistant UI built with LVGL 8.3.x for Waveshare ESP32-S3.
 - **Status Bar**: Real-time Wi-Fi and AI status indicators
 - **ST7789 Display**: 240x320 pixel LCD with full color support
 - **Touch Support**: CST328/CST3530 touchscreen auto-detection
+- **ASK AI Flow**: Tap **ASK AI** to run listen → think → answer cycle
+- **Cloud AI Hook**: Sends user prompt to your HTTP AI endpoint
 - **Arduino IDE Compatible**: Single .ino sketch, no PlatformIO required
 
 ## Hardware
@@ -44,6 +46,17 @@ Modern touchscreen AI Assistant UI built with LVGL 8.3.x for Waveshare ESP32-S3.
    - Arduino SPI
    - Arduino Wire (I2C)
 
+## Configuration
+
+Before uploading, edit these values in `01_AIAssistant.ino`:
+
+- `WIFI_SSID`
+- `WIFI_PASSWORD`
+- `AI_ENDPOINT_URL`
+- `AI_API_KEY` (optional)
+
+The sketch currently captures user prompts from Serial input (type a sentence and press Enter after tapping **ASK AI**), then sends the text to your AI endpoint.
+
 ## Installation
 
 1. Open `01_AIAssistant.ino` in Arduino IDE
@@ -52,13 +65,11 @@ Modern touchscreen AI Assistant UI built with LVGL 8.3.x for Waveshare ESP32-S3.
 4. Upload to device
 5. Monitor serial at 115200 baud
 
-## Button Callbacks
+## Button Behavior
 
-Each button prints a message to Serial when clicked:
-- **ASK AI**: Opens voice input mode (Phase 2)
-- **ESTIMATE**: Opens estimation mode (Phase 2)
-- **BUSINESS**: Opens business mode (Phase 2)
-- **SETTINGS**: Opens settings screen (Phase 2)
+- **ASK AI**: Connects Wi-Fi (if needed), listens for input on Serial, calls cloud AI endpoint, speaks/prints response
+- **ESTIMATE / BUSINESS**: Return avatar to idle state
+- **SETTINGS**: Shows configuration reminder
 
 ## Memory Usage
 
@@ -70,16 +81,16 @@ Each button prints a message to Serial when clicked:
 
 No calibration needed - coordinates map directly 1:1 with display coordinates.
 
-## Next Steps (Phase 2)
+## Next Steps
 
-- Voice input processing
-- AI model integration
-- Network connectivity
-- Local inference support
+- Replace serial input with real microphone capture
+- Replace `speak_text()` stub with real TTS audio output
+- Add JSON parsing and richer API schema support
+- Add wake word and continuous listening mode
 
 ## Notes
 
-- Phase 1 is UI-only, no Wi-Fi or AI code
+- This version includes Wi-Fi + HTTP AI request flow
 - All hardware configuration from working 00_HardwareTest
 - Touch and display stable at 115200 baud
 - Display initialized at 80MHz SPI frequency
