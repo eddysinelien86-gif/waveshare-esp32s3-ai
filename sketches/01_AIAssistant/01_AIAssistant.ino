@@ -676,6 +676,12 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
     Serial.println("[SPEAK] " + text);
   }
 
+  bool wifi_is_configured() {
+    String ssid = String(WIFI_SSID);
+    ssid.trim();
+    return ssid.length() > 0 && ssid != "YOUR_WIFI_SSID";
+  }
+
   bool connect_wifi(uint32_t timeout_ms) {
     if (!wifi_is_configured()) {
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: CONFIG NEEDED");
@@ -688,12 +694,6 @@ void lv_touch_read(lv_indev_drv_t * indev_drv, lv_indev_data_t * data) {
       wifi_connecting = false;
       if (lbl_wifi_status) lv_label_set_text(lbl_wifi_status, "Wi-Fi: ON");
       return true;
-    }
-
-    bool wifi_is_configured() {
-      String ssid = String(WIFI_SSID);
-      ssid.trim();
-      return ssid.length() > 0 && ssid != "YOUR_WIFI_SSID";
     }
 
     if (!wifi_connecting || (millis() - wifi_connect_started_ms > timeout_ms)) {
@@ -1081,7 +1081,8 @@ void loop() {
   }
 
   // Periodic Wi-Fi reconnect
-  if (wifi_is_configured() &&
+  if (!ask_ai_requested &&
+      wifi_is_configured() &&
       WiFi.status() != WL_CONNECTED &&
       (last_wifi_retry_ms == 0 || now - last_wifi_retry_ms > 30000)) {
     last_wifi_retry_ms = now;
